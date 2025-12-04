@@ -6,6 +6,21 @@ var fish2move = 100;
 var fish3move = 900;
 var fish4move = 1200;
 
+// Helpers to control automatic fish movement
+const fishConfig = [
+    { id: 'fish1', axis: 'right', offset: 100 },
+    { id: 'fish2', axis: 'left', offset: fish2move },
+    { id: 'fish3', axis: 'right', offset: fish3move },
+    { id: 'fish4', axis: 'left', offset: fish4move },
+];
+
+function setFishOffset(id, offset) {
+    const target = fishConfig.find((fish) => fish.id === id);
+    if (target) {
+        target.offset = offset;
+    }
+}
+
 if (screen.width < 400) {
 
     //Change transformation duration and translatey for mobile view
@@ -16,9 +31,104 @@ if (screen.width < 400) {
     fish2move = 1680;
     fish3move = 3000;
     fish4move = 4300;
+
+    setFishOffset('fish2', fish2move);
+    setFishOffset('fish3', fish3move);
+    setFishOffset('fish4', fish4move);
 }
 
 
+
+// Enable fish dragging inside the underwater section
+const underwaterSection = document.querySelector('.sec');
+const movableFishes = Array.from(document.querySelectorAll('.fishes'))
+    .filter((fish) => fish.id !== 'seabed');
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const fishHomePositions = new Map();
+
+function getCurrentLeft(fish) {
+    const inlineLeft = parseFloat(fish.style.left);
+    if (!Number.isNaN(inlineLeft)) return inlineLeft;
+
+    const computedLeft = parseFloat(window.getComputedStyle(fish).left);
+    return Number.isNaN(computedLeft) ? 0 : computedLeft;
+}
+
+function setFishFacing(fish, deltaX) {
+    if (Math.abs(deltaX) < 0.1) return;
+
+    const facing = deltaX < 0 ? 'left' : 'right';
+    const naturalFacing = fish.dataset.naturalFacing || 'right';
+
+    if (fish.dataset.facing !== facing) {
+        fish.dataset.facing = facing;
+        const scaleX = naturalFacing === facing ? 1 : -1;
+        fish.style.transform = `scaleX(${scaleX})`;
+    }
+}
+
+function recordHomePosition(fish) {
+    if (fishHomePositions.has(fish.id)) return fishHomePositions.get(fish.id);
+
+    const homeTop = fish.offsetTop;
+
+    const state = { homeTop };
+    fishHomePositions.set(fish.id, state);
+
+    // Normalize the inline position so later math uses pixel values instead of percentages
+    fish.style.top = `${homeTop}px`;
+
+    return state;
+}
+
+function makeFishDraggable(fish) {
+    fish.addEventListener('pointerdown', (event) => {
+        if (!underwaterSection) return;
+
+        event.preventDefault();
+
+        const pointerId = event.pointerId;
+        fish.dataset.manual = 'true';
+        fish.classList.add('dragging');
+        fish.setPointerCapture(pointerId);
+
+        const containerRect = underwaterSection.getBoundingClientRect();
+        const fishRect = fish.getBoundingClientRect();
+        const offsetX = event.clientX - fishRect.left;
+        const offsetY = event.clientY - fishRect.top;
+        let lastX = getCurrentLeft(fish);
+
+        const onPointerMove = (e) => {
+            const x = clamp(e.clientX - containerRect.left - offsetX, 0, containerRect.width - fishRect.width);
+            const y = clamp(e.clientY - containerRect.top - offsetY, 0, containerRect.height - fishRect.height);
+            const deltaX = x - lastX;
+
+            fish.style.left = `${x}px`;
+            fish.style.top = `${y}px`;
+            fish.style.right = 'auto';
+            setFishFacing(fish, deltaX);
+            lastX = x;
+        };
+
+        const onPointerUp = () => {
+            fish.releasePointerCapture(pointerId);
+            fish.classList.remove('dragging');
+            fish.removeEventListener('pointermove', onPointerMove);
+            fish.removeEventListener('pointerup', onPointerUp);
+            fish.removeEventListener('pointercancel', onPointerUp);
+        };
+
+        fish.addEventListener('pointermove', onPointerMove);
+        fish.addEventListener('pointerup', onPointerUp);
+        fish.addEventListener('pointercancel', onPointerUp);
+    });
+}
+
+movableFishes.forEach((fish) => {
+    recordHomePosition(fish);
+    makeFishDraggable(fish);
+});
 
 window.addEventListener('scroll', function () {
 
@@ -49,11 +159,47 @@ window.addEventListener('scroll', function () {
         splash.style.top = 20 + value * -0.3 + 'px';
     }
 
-    //Move fishes horizontally
-    fish1.style.right = (value - 100) * 1 + 'px';
-    fish2.style.left = (value - fish2move) * 1 + 'px';
-    fish3.style.right = (value - fish3move) * 1 + 'px';
-    fish4.style.left = (value - fish4move) * 1 + 'px';
+    const containerRect = underwaterSection ? underwaterSection.getBoundingClientRect() : null;
+
+    // Move fishes horizontally unless manually repositioned, and gently return dragged fish home
+    fishConfig.forEach(({ id, axis, offset }) => {
+        const fish = document.getElementById(id);
+
+        if (!fish || !containerRect) return;
+
+        const fishRect = fish.getBoundingClientRect();
+        const targetX = axis === 'left'
+            ? value - offset
+            : containerRect.width - fishRect.width - (value - offset);
+        const clampedX = clamp(targetX, 0, containerRect.width - fishRect.width);
+        const { homeTop } = recordHomePosition(fish);
+
+        if (fish.dataset.manual === 'true') {
+            const currentLeft = getCurrentLeft(fish);
+            const currentTop = parseFloat(fish.style.top || window.getComputedStyle(fish).top) || homeTop;
+            const easing = 0.015;
+
+            const nextLeft = currentLeft + (clampedX - currentLeft) * easing;
+            const nextTop = currentTop + (homeTop - currentTop) * easing;
+
+            fish.style.left = `${nextLeft}px`;
+            fish.style.top = `${nextTop}px`;
+            fish.style.right = 'auto';
+            setFishFacing(fish, nextLeft - currentLeft);
+
+            if (Math.abs(nextLeft - clampedX) < 0.5 && Math.abs(nextTop - homeTop) < 0.5) {
+                fish.removeAttribute('data-manual');
+            }
+            return;
+        }
+
+        const currentLeft = getCurrentLeft(fish);
+        setFishFacing(fish, clampedX - currentLeft);
+
+        fish.style.left = `${clampedX}px`;
+        fish.style.right = 'auto';
+        fish.style.top = `${homeTop}px`;
+    });
 })
 
 
