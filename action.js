@@ -50,11 +50,14 @@ const fishHomePositions = new Map();
 function recordHomePosition(fish) {
     if (fishHomePositions.has(fish.id)) return fishHomePositions.get(fish.id);
 
-    const computedStyle = window.getComputedStyle(fish);
-    const homeTop = parseFloat(computedStyle.top) || 0;
+    const homeTop = fish.offsetTop;
 
     const state = { homeTop };
     fishHomePositions.set(fish.id, state);
+
+    // Normalize the inline position so later math uses pixel values instead of percentages
+    fish.style.top = `${homeTop}px`;
+
     return state;
 }
 
