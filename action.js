@@ -45,6 +45,18 @@ const movableFishes = Array.from(document.querySelectorAll('.fishes'))
     .filter((fish) => fish.id !== 'seabed');
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const fishHomePositions = new Map();
+
+function recordHomePosition(fish) {
+    if (fishHomePositions.has(fish.id)) return fishHomePositions.get(fish.id);
+
+    const computedStyle = window.getComputedStyle(fish);
+    const homeTop = parseFloat(computedStyle.top) || 0;
+
+    const state = { homeTop };
+    fishHomePositions.set(fish.id, state);
+    return state;
+}
 
 function makeFishDraggable(fish) {
     fish.addEventListener('pointerdown', (event) => {
@@ -85,7 +97,10 @@ function makeFishDraggable(fish) {
     });
 }
 
-movableFishes.forEach(makeFishDraggable);
+movableFishes.forEach((fish) => {
+    recordHomePosition(fish);
+    makeFishDraggable(fish);
+});
 
 window.addEventListener('scroll', function () {
 
@@ -116,19 +131,42 @@ window.addEventListener('scroll', function () {
         splash.style.top = 20 + value * -0.3 + 'px';
     }
 
-    // Move fishes horizontally unless manually repositioned
+    const containerRect = underwaterSection ? underwaterSection.getBoundingClientRect() : null;
+
+    // Move fishes horizontally unless manually repositioned, and gently return dragged fish home
     fishConfig.forEach(({ id, axis, offset }) => {
         const fish = document.getElementById(id);
 
-        if (!fish || fish.dataset.manual === 'true') return;
+        if (!fish || !containerRect) return;
 
-        if (axis === 'left') {
-            fish.style.left = (value - offset) + 'px';
+        const fishRect = fish.getBoundingClientRect();
+        const targetX = axis === 'left'
+            ? value - offset
+            : containerRect.width - fishRect.width - (value - offset);
+        const clampedX = clamp(targetX, 0, containerRect.width - fishRect.width);
+        const { homeTop } = recordHomePosition(fish);
+
+        if (fish.dataset.manual === 'true') {
+            const currentLeft = parseFloat(fish.style.left || window.getComputedStyle(fish).left) || 0;
+            const currentTop = parseFloat(fish.style.top || window.getComputedStyle(fish).top) || homeTop;
+            const easing = 0.08;
+
+            const nextLeft = currentLeft + (clampedX - currentLeft) * easing;
+            const nextTop = currentTop + (homeTop - currentTop) * easing;
+
+            fish.style.left = `${nextLeft}px`;
+            fish.style.top = `${nextTop}px`;
             fish.style.right = 'auto';
-        } else {
-            fish.style.right = (value - offset) + 'px';
-            fish.style.left = 'auto';
+
+            if (Math.abs(nextLeft - clampedX) < 0.5 && Math.abs(nextTop - homeTop) < 0.5) {
+                fish.removeAttribute('data-manual');
+            }
+            return;
         }
+
+        fish.style.left = `${clampedX}px`;
+        fish.style.right = 'auto';
+        fish.style.top = `${homeTop}px`;
     });
 })
 
