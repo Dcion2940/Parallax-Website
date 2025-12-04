@@ -59,10 +59,11 @@ function setFishFacing(fish, deltaX) {
     if (Math.abs(deltaX) < 0.1) return;
 
     const facing = deltaX < 0 ? 'left' : 'right';
+    const naturalFacing = fish.dataset.naturalFacing || 'right';
 
     if (fish.dataset.facing !== facing) {
         fish.dataset.facing = facing;
-        const scaleX = facing === 'left' ? -1 : 1;
+        const scaleX = naturalFacing === facing ? 1 : -1;
         fish.style.transform = `scaleX(${scaleX})`;
     }
 }
