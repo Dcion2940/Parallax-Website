@@ -47,6 +47,26 @@ const movableFishes = Array.from(document.querySelectorAll('.fishes'))
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const fishHomePositions = new Map();
 
+function getCurrentLeft(fish) {
+    const inlineLeft = parseFloat(fish.style.left);
+    if (!Number.isNaN(inlineLeft)) return inlineLeft;
+
+    const computedLeft = parseFloat(window.getComputedStyle(fish).left);
+    return Number.isNaN(computedLeft) ? 0 : computedLeft;
+}
+
+function setFishFacing(fish, deltaX) {
+    if (Math.abs(deltaX) < 0.1) return;
+
+    const facing = deltaX < 0 ? 'left' : 'right';
+
+    if (fish.dataset.facing !== facing) {
+        fish.dataset.facing = facing;
+        const scaleX = facing === 'left' ? -1 : 1;
+        fish.style.transform = `scaleX(${scaleX})`;
+    }
+}
+
 function recordHomePosition(fish) {
     if (fishHomePositions.has(fish.id)) return fishHomePositions.get(fish.id);
 
@@ -76,14 +96,18 @@ function makeFishDraggable(fish) {
         const fishRect = fish.getBoundingClientRect();
         const offsetX = event.clientX - fishRect.left;
         const offsetY = event.clientY - fishRect.top;
+        let lastX = getCurrentLeft(fish);
 
         const onPointerMove = (e) => {
             const x = clamp(e.clientX - containerRect.left - offsetX, 0, containerRect.width - fishRect.width);
             const y = clamp(e.clientY - containerRect.top - offsetY, 0, containerRect.height - fishRect.height);
+            const deltaX = x - lastX;
 
             fish.style.left = `${x}px`;
             fish.style.top = `${y}px`;
             fish.style.right = 'auto';
+            setFishFacing(fish, deltaX);
+            lastX = x;
         };
 
         const onPointerUp = () => {
@@ -150,9 +174,9 @@ window.addEventListener('scroll', function () {
         const { homeTop } = recordHomePosition(fish);
 
         if (fish.dataset.manual === 'true') {
-            const currentLeft = parseFloat(fish.style.left || window.getComputedStyle(fish).left) || 0;
+            const currentLeft = getCurrentLeft(fish);
             const currentTop = parseFloat(fish.style.top || window.getComputedStyle(fish).top) || homeTop;
-            const easing = 0.04;
+            const easing = 0.015;
 
             const nextLeft = currentLeft + (clampedX - currentLeft) * easing;
             const nextTop = currentTop + (homeTop - currentTop) * easing;
@@ -160,12 +184,16 @@ window.addEventListener('scroll', function () {
             fish.style.left = `${nextLeft}px`;
             fish.style.top = `${nextTop}px`;
             fish.style.right = 'auto';
+            setFishFacing(fish, nextLeft - currentLeft);
 
             if (Math.abs(nextLeft - clampedX) < 0.5 && Math.abs(nextTop - homeTop) < 0.5) {
                 fish.removeAttribute('data-manual');
             }
             return;
         }
+
+        const currentLeft = getCurrentLeft(fish);
+        setFishFacing(fish, clampedX - currentLeft);
 
         fish.style.left = `${clampedX}px`;
         fish.style.right = 'auto';
