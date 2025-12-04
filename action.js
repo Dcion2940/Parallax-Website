@@ -152,7 +152,7 @@ window.addEventListener('scroll', function () {
         if (fish.dataset.manual === 'true') {
             const currentLeft = parseFloat(fish.style.left || window.getComputedStyle(fish).left) || 0;
             const currentTop = parseFloat(fish.style.top || window.getComputedStyle(fish).top) || homeTop;
-            const easing = 0.08;
+            const easing = 0.04;
 
             const nextLeft = currentLeft + (clampedX - currentLeft) * easing;
             const nextTop = currentTop + (homeTop - currentTop) * easing;
