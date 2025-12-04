@@ -227,6 +227,9 @@ section #text {
     position: absolute;
     opacity: 0.8;
     cursor: grab;
+    z-index: 120;
+    pointer-events: auto;
+    touch-action: none;
 }
 
 .fishes.dragging {

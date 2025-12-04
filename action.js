@@ -41,7 +41,8 @@ if (screen.width < 400) {
 
 // Enable fish dragging inside the underwater section
 const underwaterSection = document.querySelector('.sec');
-const movableFishes = Array.from(document.querySelectorAll('.fishes'));
+const movableFishes = Array.from(document.querySelectorAll('.fishes'))
+    .filter((fish) => fish.id !== 'seabed');
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
