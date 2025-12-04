@@ -6,6 +6,21 @@ var fish2move = 100;
 var fish3move = 900;
 var fish4move = 1200;
 
+// Helpers to control automatic fish movement
+const fishConfig = [
+    { id: 'fish1', axis: 'right', offset: 100 },
+    { id: 'fish2', axis: 'left', offset: fish2move },
+    { id: 'fish3', axis: 'right', offset: fish3move },
+    { id: 'fish4', axis: 'left', offset: fish4move },
+];
+
+function setFishOffset(id, offset) {
+    const target = fishConfig.find((fish) => fish.id === id);
+    if (target) {
+        target.offset = offset;
+    }
+}
+
 if (screen.width < 400) {
 
     //Change transformation duration and translatey for mobile view
@@ -16,9 +31,60 @@ if (screen.width < 400) {
     fish2move = 1680;
     fish3move = 3000;
     fish4move = 4300;
+
+    setFishOffset('fish2', fish2move);
+    setFishOffset('fish3', fish3move);
+    setFishOffset('fish4', fish4move);
 }
 
 
+
+// Enable fish dragging inside the underwater section
+const underwaterSection = document.querySelector('.sec');
+const movableFishes = Array.from(document.querySelectorAll('.fishes'));
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+function makeFishDraggable(fish) {
+    fish.addEventListener('pointerdown', (event) => {
+        if (!underwaterSection) return;
+
+        event.preventDefault();
+
+        const pointerId = event.pointerId;
+        fish.dataset.manual = 'true';
+        fish.classList.add('dragging');
+        fish.setPointerCapture(pointerId);
+
+        const containerRect = underwaterSection.getBoundingClientRect();
+        const fishRect = fish.getBoundingClientRect();
+        const offsetX = event.clientX - fishRect.left;
+        const offsetY = event.clientY - fishRect.top;
+
+        const onPointerMove = (e) => {
+            const x = clamp(e.clientX - containerRect.left - offsetX, 0, containerRect.width - fishRect.width);
+            const y = clamp(e.clientY - containerRect.top - offsetY, 0, containerRect.height - fishRect.height);
+
+            fish.style.left = `${x}px`;
+            fish.style.top = `${y}px`;
+            fish.style.right = 'auto';
+        };
+
+        const onPointerUp = () => {
+            fish.releasePointerCapture(pointerId);
+            fish.classList.remove('dragging');
+            fish.removeEventListener('pointermove', onPointerMove);
+            fish.removeEventListener('pointerup', onPointerUp);
+            fish.removeEventListener('pointercancel', onPointerUp);
+        };
+
+        fish.addEventListener('pointermove', onPointerMove);
+        fish.addEventListener('pointerup', onPointerUp);
+        fish.addEventListener('pointercancel', onPointerUp);
+    });
+}
+
+movableFishes.forEach(makeFishDraggable);
 
 window.addEventListener('scroll', function () {
 
@@ -49,11 +115,20 @@ window.addEventListener('scroll', function () {
         splash.style.top = 20 + value * -0.3 + 'px';
     }
 
-    //Move fishes horizontally
-    fish1.style.right = (value - 100) * 1 + 'px';
-    fish2.style.left = (value - fish2move) * 1 + 'px';
-    fish3.style.right = (value - fish3move) * 1 + 'px';
-    fish4.style.left = (value - fish4move) * 1 + 'px';
+    // Move fishes horizontally unless manually repositioned
+    fishConfig.forEach(({ id, axis, offset }) => {
+        const fish = document.getElementById(id);
+
+        if (!fish || fish.dataset.manual === 'true') return;
+
+        if (axis === 'left') {
+            fish.style.left = (value - offset) + 'px';
+            fish.style.right = 'auto';
+        } else {
+            fish.style.right = (value - offset) + 'px';
+            fish.style.left = 'auto';
+        }
+    });
 })
 
 
